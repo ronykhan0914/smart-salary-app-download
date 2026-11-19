@@ -1,0 +1,8 @@
+name: Disabled duplicate notification workflow
+on:
+  workflow_dispatch:
+jobs:
+  disabled:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Duplicate scheduler disabled; daily-islamic-notifications.yml is the active schedule."

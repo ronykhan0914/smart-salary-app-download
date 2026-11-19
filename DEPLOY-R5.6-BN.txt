@@ -1,0 +1,2 @@
+এই R5.6 নির্দেশনা পুরোনো। সর্বশেষ ও কার্যকর নির্দেশনার জন্য RENDER-NEXT-STEPS-BN.txt এবং README.md দেখুন।
+R5.11-এ Backend নিজেই schema.sql নিরাপদভাবে প্রয়োগ করে; SQL Editor/pgAdmin deploy প্রয়োজন নেই।

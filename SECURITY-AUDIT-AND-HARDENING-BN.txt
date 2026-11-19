@@ -1,0 +1,42 @@
+SMART SALARY APP 9.14 — SECURITY AUDIT & HARDENING REPORT
+তারিখ: ১৬ নভেম্বর ২০২৬
+
+এই রিলিজে কোড-স্তরে করা নিরাপত্তা উন্নয়ন
+1. API-র ব্যক্তিগত salary/profile/backup response-এ Cache-Control: no-store, private।
+2. API-তে global rate limit; login/admin login-এ পৃথক stricter limiter।
+3. JWT verification-এ HS256 algorithm allow-list।
+4. নতুন account password bcrypt-এর 72-byte সীমা server-side-এ যাচাই।
+5. Profile update allow-list, type ও length validation।
+6. Backup payload object/JSON ও UTF-8 byte-size validation।
+7. Frontend-এ nosniff, frame denial, strict referrer policy, permissions policy ও HSTS response headers।
+8. Portrait-এর final visible state-এ filter:none!important; scale/3D reveal animation-এর সময় ছবিকে blur করে রাখার CSS conflict বন্ধ।
+9. Version 9.14 এবং বিদ্যমান schema/data বজায়; schema.sql-এ DROP/TRUNCATE নেই।
+
+অবশিষ্ট গুরুত্বপূর্ণ ঝুঁকি — এগুলো গোপন করা হয়নি
+A. Frontend এখনো localStorage-এ কিছু account-এর plain-text password রাখে (cred_* এবং legacy profile.pw), offline login-এর জন্য। XSS বা compromised device হলে ঝুঁকি। এটি সরাসরি মুছলে offline login/পুরোনো account access ভাঙতে পারে; নিরাপদ migration ও বাস্তব account regression test ছাড়া জোর করে সরানো হয়নি।
+B. JWT token localStorage-এ থাকে; XSS হলে token চুরি হতে পারে। HttpOnly secure cookie migration-এর জন্য frontend/backend auth flow একসঙ্গে পরিবর্তন ও cross-device regression test দরকার।
+C. Salary/profile/ID-card/photo data browser localStorage-এ এবং server backup database-এ থাকে; client-side encryption-at-rest/key management এই রিলিজে যোগ হয়নি।
+D. Frontend-এ legacy dynamic innerHTML/inline handlers আছে। সম্পূর্ণ DOM-XSS audit/refactor এবং CSP report-only rollout হয়নি; তাই কঠোর CSP যোগ করা হয়নি, কারণ এতে বিদ্যমান login/Google Drive/UI ভাঙতে পারে।
+E. Recovery question/answer ও recovery code browser-local; এটি কেন্দ্রীয় server password reset নয়।
+F. Render DB backup retention/PITR, restore drill, least-privilege DB role, production secrets rotation ও live TLS/configuration এই ZIP থেকে যাচাই করা যায় না।
+
+পরীক্ষার ফল (এই working copy-তে)
+- node --check server.js: PASS
+- node --check api-config.js: PASS
+- node --check sw.js: PASS
+- index.html-এর ৮টি non-empty inline JavaScript block: syntax PASS
+- package.json version: 9.14 PASS
+- schema.sql destructive DROP/TRUNCATE statement: পাওয়া যায়নি
+- ZIP integrity: build-এর পরে পুনরায় পরীক্ষা করা হবে
+- Live production penetration test: NOT PERFORMED
+- Real phone/browser visual test: NOT PERFORMED
+- Database backup restore drill: NOT PERFORMED
+
+ডিপ্লয় সংক্রান্ত জরুরি কথা
+- Frontend Netlify-তে deploy করতে হবে।
+- Backend server.js-ও Render service-এ deploy না করলে backend hardening কার্যকর হবে না। শুধু frontend ZIP deploy যথেষ্ট নয়।
+- Render environment variables যাচাই করুন: DATABASE_URL, JWT_SECRET (কমপক্ষে 32 random characters), ADMIN_USERNAME, ADMIN_PASSWORD_HASH, APP_ORIGIN। Secret কখনো HTML/JS/ZIP-এ রাখবেন না।
+- Deploy-এর আগে Render PostgreSQL backup/snapshot নিন। কোনো database reset করবেন না।
+- Deploy-এর পর https://smart-salary-app.onrender.com/api/health থেকে database=ready নিশ্চিত করুন।
+
+এই রিপোর্ট কোড-স্তরের অডিটের ফল; স্বাধীন penetration-test certificate বা শতভাগ নিরাপত্তার নিশ্চয়তা নয়।

@@ -1,0 +1,19 @@
+SMART SALARY API — CURRENT SERVER SETTINGS (R5.11)
+
+Render Web Service:
+- Root Directory: blank (repository root)
+- Runtime: Node.js 20+
+- Build Command: npm install
+- Start Command: npm start
+
+Required environment variable names:
+DATABASE_URL
+JWT_SECRET (at least 32 characters)
+ADMIN_USERNAME
+ADMIN_PASSWORD_HASH
+APP_ORIGIN=https://khanronysalaryapp.netlify.app
+DATABASE_SSL=true (optional; TLS is enabled by default)
+
+Do not put actual secret values in source control or share them in chat.
+Backend automatically applies safe, repeatable schema.sql. Do not drop/reset the existing database.
+For full deploy and test steps, see RENDER-NEXT-STEPS-BN.txt and README.md.

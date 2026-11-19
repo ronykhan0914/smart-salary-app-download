@@ -1,0 +1,20 @@
+SMART SALARY APP — R5.9 FINAL FIX PACKAGE
+
+Changes:
+1) Removed the SS monogram/logo from the first startup curtain. The initial brand screen displays for 500ms, folds inward, is then removed from layout, and only then reveals the Play button. Existing intro sequence, portrait timing, audio tap behavior, editor credit, and later animations are preserved.
+2) Added the known production Netlify origin (https://khanronysalaryapp.netlify.app) to the backend CORS allowlist in addition to APP_ORIGIN values. CORS rejection now returns a readable JSON error.
+3) Kept safe, idempotent schema bootstrap in server.js. The API attempts to create/upgrade app_users and user_data from schema.sql before account/auth routes run. It does not drop user data.
+4) Bumped the service-worker cache version to force clients to receive the updated files.
+
+Validation performed locally:
+- node --check server.js
+- node --check sw.js
+- Inline JavaScript syntax checks for index.html
+- Confirmed SS monogram markup is absent
+- Confirmed 500ms pre-start timer remains
+- ZIP integrity check
+
+Deployment note:
+This package has NOT been deployed to Netlify/Render. GitHub repository write/read through the connected GitHub integration returned 404 in this session, and the public endpoints could not be reached from this runtime. After uploading/committing these files to the connected GitHub main branch, Render auto-deploy should deploy the backend; Netlify should deploy the frontend if its Git integration is enabled.
+
+If the backend still reports database schema_not_ready after deployment, open Render PostgreSQL SQL Editor and run schema.sql from this package. The Render Postgres connector currently cannot connect because its external IP allowlist is empty; this does not by itself prevent Render services from using the database's internal connection URL.

@@ -1,0 +1,14 @@
+SMART SALARY APP R5.3 — PERFORMANCE UPDATE
+
+এই আপডেটে:
+1. Startup intro-র মোট সময় প্রায় ৪.৮ সেকেন্ডে নামানো হয়েছে; পরিচিতি/স্বাক্ষর সর্বোচ্চ প্রায় ১ সেকেন্ড দেখানোর পর সরিয়ে দেওয়া হয়।
+2. Google Drive cloud restore-এর network response-এর জন্য login screen আটকে থাকে না; login সফল হলে app আগে খোলে, restore background-এ চলে।
+3. Audio preload বন্ধ করা হয়েছে; ব্যবহারকারী শুরুতে স্পর্শ করলে তবেই audio load/play হবে।
+4. Service worker-এর initial cache থেকে MP3 সরানো হয়েছে, যাতে app install/cache করার সময় অপ্রয়োজনীয় audio download না হয়।
+5. Duplicate service worker registration বাদ দেওয়া হয়েছে; version-aware updater রাখা হয়েছে।
+6. Google Fonts preconnect যোগ, page transition ও কিছু চলমান animation/shadow কমানো হয়েছে।
+
+সীমাবদ্ধতা:
+- ৫–৬ সেকেন্ড হলো app-এর intro UI লক্ষ্য; ফোনের গতি, নেটওয়ার্ক, Render cold start বা Google-এর response time এর বাইরে।
+- বাস্তব ডিভাইস/লাইভ সার্ভারে performance benchmark এই প্যাকেজ তৈরির পরিবেশে করা হয়নি।
+- Deploy করার পর Android ফোনে প্রথমবার এবং পরেরবার আলাদা করে পরীক্ষা করতে হবে।

@@ -1,0 +1,26 @@
+SMART SALARY APP R5.11 — DEPLOY নির্দেশনা
+
+১) ZIP extract করুন। smart-salary-app-main ফোল্ডারের ভেতরের সব ফাইল GitHub repository root-এ upload/replace করুন। ZIP-টিকে একক ফাইল হিসেবে upload করবেন না।
+২) Commit changes করুন। Render ও Netlify auto-deploy চালু থাকলে deploy নিজে শুরু হবে; না থাকলে dashboard থেকে deploy করুন। কোনো paid plan বাছবেন না।
+৩) Render service settings অপরিবর্তিত রাখুন:
+   Runtime: Node
+   Build: npm install
+   Start: npm start
+   Root Directory: ফাঁকা
+   Node: 20+
+৪) Environment variables আগে থেকে সঠিক থাকলে পরিবর্তন করবেন না। প্রয়োজনীয় নাম: DATABASE_URL, JWT_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD_HASH, APP_ORIGIN। Secret/password কখনো GitHub বা ChatGPT-তে দেবেন না।
+৫) Backend deploy শেষে খুলুন:
+   https://smart-salary-app.onrender.com/api/health
+   প্রত্যাশিত: {"ok":true,"service":"smart-salary-api","database":"ready"}
+৬) Frontend deploy শেষ হলে private/incognito tab-এ খুলুন:
+   https://khanronysalaryapp.netlify.app
+৭) প্রথমে dummy account খুলে logout/login, profile save, salary data save এবং refresh পরীক্ষা করুন। এরপর আলাদা দ্বিতীয় dummy account দিয়ে data isolation পরীক্ষা করুন।
+
+Database:
+- Backend স্বয়ংক্রিয়ভাবে schema.sql চালায়। SQL Editor বা pgAdmin deploy করা আবশ্যক নয়।
+- বিদ্যমান database drop/reset করবেন না। schema.sql নিরাপদভাবে missing table/column/index যোগ করে; user data drop করে না।
+
+পরীক্ষার সীমা:
+- Health ready মানে database schema ready; signup/login নিশ্চিত নয়।
+- Admin login ও Google Drive OAuth live configuration আলাদা করে পরীক্ষা করতে হবে।
+- Free PostgreSQL-কে স্থায়ী backup ধরে নেবেন না; গুরুত্বপূর্ণ তথ্য নিয়মিত export রাখুন।

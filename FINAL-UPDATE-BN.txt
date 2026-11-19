@@ -1,0 +1,35 @@
+SMART SALARY APP — FINAL HANDOFF R5.11
+তারিখ: ১৬ নভেম্বর ২০২৬
+
+বর্তমান লাইভ যাচাই:
+- Backend health endpoint থেকে পাওয়া ফলাফল:
+  {"ok":true,"service":"smart-salary-api","database":"ready"}
+- অর্থাৎ API চালু এবং প্রয়োজনীয় PostgreSQL schema প্রস্তুত।
+- এই ফলাফল একা নতুন অ্যাকাউন্ট খোলা, লগইন, Admin বা Google Drive Backup সফল প্রমাণ করে না।
+
+এই সংস্করণে সংশোধন:
+১. Login নিরাপত্তা: API থেকে 401/403 (ভুল পাসওয়ার্ড/নিষ্ক্রিয় অ্যাকাউন্ট) এলে আর local credential দিয়ে ঢুকতে দেবে না। কেবল API নেটওয়ার্কে unreachable হলে offline local login fallback থাকবে।
+২. Service worker cache version R5.11 করা হয়েছে, যাতে পুরোনো cached app সরিয়ে নতুন ফাইল লোড হয়।
+৩. Netlify-তে index.html ও api-config.js no-cache header যোগ করা হয়েছে, যাতে নতুন frontend/API config দ্রুত পাওয়া যায়।
+৪. README ও deployment নির্দেশনা পুরোনো SQL Editor/ম্যানুয়াল schema নির্দেশনা থেকে সংশোধন করা হয়েছে; backend নিজেই নিরাপদ schema initialization চালায়।
+৫. PostgreSQL schema migration repeatable; বিদ্যমান user/account data drop করে না।
+
+ডিপ্লয় করার নিয়ম:
+- ZIP extract করে smart-salary-app-main ফোল্ডারের ভেতরের সব ফাইল GitHub repository root-এ replace/upload করে commit করতে হবে। ZIP ফাইলটিকে repository-তে একক ফাইল হিসেবে দেবেন না।
+- Render ও Netlify deploy শেষ হলে health URL খুলে ready নিশ্চিত করুন।
+- তারপর private/incognito tab-এ app খুলে dummy account দিয়ে signup ও login পরীক্ষা করুন।
+
+গুরুত্বপূর্ণ:
+- এই ChatGPT session থেকে GitHub repository-তে সরাসরি commit/push করা সম্ভব হয়নি; তাই ZIP তৈরি মানেই live Netlify frontend update হয়ে গেছে নয়।
+- Render service-এর বর্তমান health ready; কিন্তু নতুন R5.11 frontend পরিবর্তন GitHub/Netlify-তে deploy না হওয়া পর্যন্ত live app-এ আসবে না।
+- Admin credentials, Google OAuth consent/origin/Drive API এবং দুইটি আলাদা account-এর data isolation live test ছাড়া verified বলা যাবে না।
+- কোনো paid plan, pgAdmin বা card প্রয়োজন নেই।
+- বাস্তব কর্মীর তথ্য দেওয়ার আগে dummy account দিয়ে সব পরীক্ষা করুন।
+
+
+R5.12 STARTUP DESIGN UPDATE (2026-11-16)
+- 0.5 সেকেন্ডের opening curtain এরপর inward-fold animation শেষ হলে portrait ও dynamic Play একসাথে দৃশ্যমান হয়।
+- Portrait: Ronykhan_Salaryapp_launcher_1.png; নামের caption-সহ দেখানো হয়।
+- Play চাপলে audio ও greeting/Bismillah/description/owner-credit animation শুরু হয়।
+- Service-worker cache version R5.12 করা হয়েছে; পুরোনো cache মুছে নতুন shell/assets নেওয়া হয়।
+- অ্যাপের data/schema/auth logic এই UI update-এ পরিবর্তন করা হয়নি।

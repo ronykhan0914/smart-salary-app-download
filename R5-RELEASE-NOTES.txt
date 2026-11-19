@@ -1,0 +1,23 @@
+SMART SALARY — R5.2 RELEASE NOTES
+
+R5.2 FIXES
+1) Service Worker cache version bumped to r5.2 so installed clients can receive this release.
+2) Removed two non-existent icon-192.png/icon-512.png entries from the precache list. The actual launcher PNG files remain referenced by the manifest.
+3) Backend CORS now permits PATCH, required by the profile update and Admin enable/disable endpoints.
+4) Corrected deployment instructions to match the actual repository layout: server.js, package.json, schema.sql and make-admin-hash.js are in the repository root, not a server/ subfolder.
+5) Confirmed office ID-card file inputs do not force camera capture; Android can offer the available image picker.
+
+DEPLOYMENT STATUS
+- This is a source-code package, not a live backend deployment.
+- api-config.js remains window.API_BASE = '' until the API is deployed.
+- Google Drive remains inactive until Google OAuth is configured and GCID is replaced with the authorized Web Client ID.
+- Existing Render Free PostgreSQL test database expires 13 December 2026.
+- Do not upload private salary-history imports, passwords, JWT secrets, database URLs or tokens to public GitHub.
+
+TESTING REQUIRED BEFORE REAL USE
+- Deploy API and run schema.sql.
+- Verify /api/health.
+- Set API_BASE and redeploy Netlify.
+- Test registration, login, profile PATCH, sync/restore, Admin login, account disable/enable, server backup reset and permanent delete using dummy accounts.
+- Confirm CORS from the Netlify origin and verify Android gallery upload.
+- This release is not certified or guaranteed secure; do not invite real users before end-to-end testing.

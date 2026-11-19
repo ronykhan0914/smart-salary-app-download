@@ -1,0 +1,8 @@
+Smart Salary App — Version 9.14 (Final Fix)
+- সংস্করণ নম্বর 9.14 অপরিবর্তিত।
+- Play বোতাম দেখানোর আগে ছবি আর প্রকাশ করা হয় না।
+- Play চাপলে ছবির জন্য আলাদা 3D reveal animation চালু হয়।
+- একই সময়ে সালামের সম্পূর্ণ বাংলা লেখা জোরপূর্বক দৃশ্যমান করা হয়; সর্বশেষ CSS override এবং inline visibility নিশ্চিত করা হয়েছে।
+- CSS-কে সর্বশেষ style block-এ রাখা হয়েছে, যাতে পুরোনো CSS নতুন ডিজাইন/সালাম/অ্যানিমেশনকে ঢেকে দিতে না পারে।
+- Service Worker cache key নতুন করা হয়েছে, সংস্করণ 9.14-ই রয়েছে।
+- Backend/server.js অপরিবর্তিত; আগের signup protection বজায় আছে।

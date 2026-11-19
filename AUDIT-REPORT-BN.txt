@@ -1,0 +1,32 @@
+SMART SALARY APP R5.11 — SOURCE AUDIT REPORT
+তারিখ: ১৬ নভেম্বর ২০২৬
+
+পরীক্ষিত ফাইলসমূহ:
+- index.html, admin.html
+- server.js, schema.sql, package.json
+- api-config.js, sw.js, netlify.toml, manifest.webmanifest
+- deployment/readme documentation
+
+যাচাই ও পরিবর্তন:
+1. Backend health/schema bootstrap implementation পর্যালোচনা করা হয়েছে। Health response live-এ user-provided result অনুযায়ী ok=true এবং database=ready।
+2. Registration transaction: app_users account এবং user_data backup row এক transaction-এ তৈরি হয়; ব্যর্থ হলে rollback হয়।
+3. User data API-তে JWT subject/user_id অনুযায়ী scoped; এক user-এর token দিয়ে অন্য user-এর backup row পড়া/লেখার route নেই।
+4. Login bug সংশোধন: server 401/403 পেলে local stored credential দিয়ে আর bypass করা যাবে না। শুধু network unreachable হলে local/offline fallback থাকবে।
+5. Service worker cache version bump R5.11 করা হয়েছে।
+6. index.html ও api-config.js-এর জন্য Netlify no-cache header যোগ হয়েছে।
+7. পুরোনো deployment instructions আপডেট/চিহ্নিত করা হয়েছে; auto schema bootstrap-এর সঙ্গে অসামঞ্জস্যপূর্ণ SQL Editor নির্দেশনা সরানো হয়েছে।
+
+Local syntax/format checks:
+- node --check server.js: PASS
+- node --check sw.js: PASS
+- node --check make-admin-hash.js: PASS
+- index.html inline JavaScript blocks: 8 checked, PASS
+- admin.html inline JavaScript: PASS
+- manifest.webmanifest JSON: PASS
+
+এই পরিবেশে যা করা যায়নি:
+- GitHub-এ push/commit এবং Netlify frontend deploy: করা হয়নি (বর্তমান GitHub connector repository-তে প্রবেশ করতে পারেনি)।
+- Live registration/login, two-user isolation, Admin login, profile sync/restore এবং Google Drive OAuth end-to-end: পরীক্ষা করা হয়নি।
+- Render health response ready হলেও সেটি একা উপরোক্ত workflow-গুলোর সফলতা প্রমাণ করে না।
+
+অতএব এই ZIP হলো audited source handoff; live production acceptance test এখনো বাকি। প্রথমে dummy account দিয়ে পরীক্ষা করুন।

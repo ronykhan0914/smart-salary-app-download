@@ -1,0 +1,170 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android-wrapper/**'
+      - 'admin.html'
+      - 'index.html'
+      - 'server.js'
+      - '.github/workflows/build-android-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify live API and notification configuration
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 https://smart-salary-app.onrender.com/api/health
+          echo
+          curl --fail --silent --show-error --retry 3 --retry-delay 3 https://smart-salary-app.onrender.com/api/push/public-key
+          echo
+          node --check server.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: android-wrapper/package.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+      - name: Install wrapper dependencies
+        working-directory: android-wrapper
+        run: npm install
+
+      - name: Bundle app frontend into local Android assets
+        working-directory: android-wrapper
+        run: node build-local-web.mjs
+
+      - name: Add Android platform
+        working-directory: android-wrapper
+        run: npx cap add android
+
+      - name: Set automatic Android version
+        working-directory: android-wrapper/android
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          code=int(os.environ['BUILD_NUMBER'])+1
+          name=f"1.0.{code}"
+          s=re.sub(r'versionCode\\s+\\d+', f'versionCode {code}', s, count=1)
+          s=re.sub(r'versionName\\s+"[^"]+"', f'versionName "{name}"', s, count=1)
+          if 'versionCode' not in s or 'versionName' not in s:
+              raise SystemExit('Could not set Android versionCode/versionName')
+          p.write_text(s)
+          print(f'APK version set: {name} (code {code})')
+          PY
+
+      - name: Download app icon source and create splash canvas
+        working-directory: android-wrapper
+        run: |
+          mkdir -p assets
+          cp ../Ronykhan_Salaryapp_launcher_1.png /tmp/app-icon-source.png
+          python -m pip install --quiet pillow
+          python - <<'PY'
+          from PIL import Image, ImageOps
+          src = Image.open('/tmp/app-icon-source.png').convert('RGBA')
+          icon = ImageOps.contain(src, (1024, 1024))
+          canvas = Image.new('RGBA', (1024, 1024), (5, 5, 7, 255))
+          canvas.alpha_composite(icon, ((1024-icon.width)//2, (1024-icon.height)//2))
+          canvas.convert('RGB').save('assets/icon.png')
+          Image.new('RGB', (2732, 2732), (5, 5, 7)).save('assets/splash.png')
+          PY
+
+      - name: Generate Android icons and splash assets
+        working-directory: android-wrapper
+        run: npx capacitor-assets generate --android
+
+      - name: Sync Android platform
+        working-directory: android-wrapper
+        run: npx cap sync android
+
+      - name: Configure stable APK signing when repository secrets are available
+        working-directory: android-wrapper/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/smart-salary-release.keystore
+            python - <<'PY'
+          from pathlib import Path
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          block="""
+              signingConfigs {
+                  stableInstall {
+                      storeFile file('smart-salary-release.keystore')
+                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                  }
+              }
+          """
+          if 'signingConfigs {' not in s:
+              s=s.replace('android {', 'android {\n'+block, 1)
+          if 'signingConfig signingConfigs.stableInstall' not in s:
+              s=s.replace('buildTypes {\n        debug {', 'buildTypes {\n        debug {\n            signingConfig signingConfigs.stableInstall', 1)
+          p.write_text(s)
+          PY
+            echo "STABLE_SIGNING_CONFIGURED=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Stable signing secrets are not configured. This APK uses an ephemeral GitHub debug key; updates may not install over previous builds."
+            echo "STABLE_SIGNING_CONFIGURED=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build debug APK
+        working-directory: android-wrapper/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk
+
+
+      - name: Prepare APK release asset
+        run: cp android-wrapper/android/app/build/outputs/apk/debug/app-debug.apk Smart-Salary.apk
+
+      - name: Publish APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: smart-salary-v${{ github.run_number }}
+          name: Smart Salary App v${{ github.run_number }}
+          make_latest: true
+          files: Smart-Salary.apk
+          fail_on_unmatched_files: true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Smart-Salary-Android-debug-APK
+          path: android-wrapper/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
