@@ -178,29 +178,236 @@ jobs:
           """
 
           if 'signingConfigs {' not in s:
-              s = s.replace('android {', 'android {\\n' + signing, 1)
 
-          if 'signingConfig signingConfigs.release' not in s:
-              s = s.replace(
-                  'release {',
-                  'release {\\n            signingConfig signingConfigs.release',
-                  1
-              )
+name: Smart Salary - Android Release APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android-wrapper/**'
+      - 'admin.html'
+      - 'index.html'
+      - 'server.js'
+      - '.github/workflows/build-android-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Backend
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 \
+            https://smart-salary-app.onrender.com/api/health
+          echo
+          curl --fail --silent --show-error --retry 3 --retry-delay 3 \
+            https://smart-salary-app.onrender.com/api/push/public-key
+          echo
+          node --check server.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager --install \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "platform-tools"
+
+      - name: Install dependencies
+        working-directory: android-wrapper
+        run: npm install
+
+      - name: Bundle app frontend
+        working-directory: android-wrapper
+        run: node build-local-web.mjs
+
+      - name: Create Android platform
+        working-directory: android-wrapper
+        run: npx cap add android
+
+      - name: Configure app version
+        working-directory: android-wrapper/android
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+
+          p = Path("app/build.gradle")
+          s = p.read_text()
+
+          code = int(os.environ["BUILD_NUMBER"]) + 10
+          name = f"1.0.{code}"
+
+          s = re.sub(
+              r'versionCode\s+\d+',
+              f'versionCode {code}',
+              s,
+              count=1
+          )
+
+          s = re.sub(
+              r'versionName\s+"[^"]+"',
+              f'versionName "{name}"',
+              s,
+              count=1
+          )
 
           p.write_text(s)
+          print(f"Release version: {name}")
+          PY
+
+      - name: Generate app icon and splash
+        working-directory: android-wrapper
+        run: |
+          mkdir -p assets
+          cp ../Ronykhan_Salaryapp_launcher_1.png /tmp/app-icon.png
+
+          python -m pip install --quiet pillow
+
+          python - <<'PY'
+          from PIL import Image, ImageOps
+
+          src = Image.open('/tmp/app-icon.png').convert('RGBA')
+          icon = ImageOps.contain(src, (1024, 1024))
+
+          canvas = Image.new(
+              'RGBA',
+              (1024, 1024),
+              (5, 5, 7, 255)
+          )
+
+          canvas.alpha_composite(
+              icon,
+              ((1024-icon.width)//2, (1024-icon.height)//2)
+          )
+
+          canvas.convert('RGB').save('assets/icon.png')
+
+          Image.new(
+              'RGB',
+              (2732, 2732),
+              (5, 5, 7)
+          ).save('assets/splash.png')
+          PY
+
+      - name: Generate Android assets
+        working-directory: android-wrapper
+        run: npx capacitor-assets generate --android
+
+      - name: Sync Capacitor
+        working-directory: android-wrapper
+        run: npx cap sync android
+
+      - name: Configure Release Signing
+        working-directory: android-wrapper/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] ||
+             [ -z "$ANDROID_KEYSTORE_PASSWORD" ] ||
+             [ -z "$ANDROID_KEY_ALIAS" ] ||
+             [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "::error::Release signing secrets are missing."
+            exit 1
+          fi
+
+          echo "$ANDROID_KEYSTORE_BASE64" \
+            | base64 --decode \
+            > app/smart-salary-release.keystore
+
+          test -s app/smart-salary-release.keystore
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('app/build.gradle')
+          s = p.read_text()
+
+          signing = """
+              signingConfigs {
+                  release {
+                      storeFile file('smart-salary-release.keystore')
+                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                  }
+              }
+          """
+
+          if 'signingConfigs {' not in s:
+              s = re.sub(
+                  r'android\\s*\\{',
+                  lambda m: m.group(0) + '\\n' + signing,
+                  s,
+                  count=1
+              )
+
+          if 'signingConfig signingConfigs.release' not in s:
+              pattern = r'(buildTypes\\s*\\{\\s*release\\s*\\{)'
+              s, count = re.subn(
+                  pattern,
+                  r'\\1\\n            signingConfig signingConfigs.release',
+                  s,
+                  count=1
+              )
+
+              if count != 1:
+                  raise SystemExit(
+                      'Could not configure release signing in buildTypes.'
+                  )
+
+          p.write_text(s)
+          print('Release signing configuration completed.')
           PY
 
       - name: Build Release APK
         working-directory: android-wrapper/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          set -e
           chmod +x ./gradlew
-          ./gradlew assembleRelease
+          ./gradlew --no-daemon assembleRelease
 
       - name: Verify APK signature
         run: |
+          set -e
+
           APK="android-wrapper/android/app/build/outputs/apk/release/app-release.apk"
 
-          test -f "$APK"
+          test -s "$APK"
 
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" \
             verify --verbose "$APK"
@@ -212,6 +419,10 @@ jobs:
         run: |
           cp android-wrapper/android/app/build/outputs/apk/release/app-release.apk \
              Smart-Salary.apk
+
+          test -s Smart-Salary.apk
+
+          ls -lh Smart-Salary.apk
 
       - name: Publish Release
         uses: softprops/action-gh-release@v2
