@@ -1,4 +1,5 @@
-name: Smart Salary - Android Release APK
+
+name: Smart Salary - Final Android Release
 
 on:
   workflow_dispatch:
@@ -14,30 +15,26 @@ permissions:
   contents: write
 
 jobs:
-  build-release-apk:
+  release:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify Backend
+      - name: Check Backend
         run: |
           set -e
           curl --fail --silent --show-error --retry 5 --retry-delay 5 \
             https://smart-salary-app.onrender.com/api/health
-          echo
-          curl --fail --silent --show-error --retry 3 --retry-delay 3 \
-            https://smart-salary-app.onrender.com/api/push/public-key
-          echo
           node --check server.js
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Setup Java 21
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -45,36 +42,31 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
-        with:
-          packages: 'platform-tools'
 
-      - name: Install Android SDK components
+      - name: Install SDK
         run: |
-          set -e
           sdkmanager --install \
             "platforms;android-36" \
             "build-tools;36.0.0" \
             "platform-tools"
 
-      - name: Install dependencies
+      - name: Install Dependencies
         working-directory: android-wrapper
         run: npm install
 
-      - name: Bundle app frontend
+      - name: Build Web App
         working-directory: android-wrapper
         run: node build-local-web.mjs
 
-      - name: Create Android platform
+      - name: Create Android
         working-directory: android-wrapper
         run: npx cap add android
 
-      - name: Configure app version
+      - name: Configure Version
         working-directory: android-wrapper/android
         env:
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          set -e
-
           python - <<'PY'
           import os
           import re
@@ -84,76 +76,70 @@ jobs:
           s = p.read_text()
 
           code = int(os.environ["BUILD_NUMBER"]) + 10
-          name = f"1.0.{code}"
+          version = f"1.0.{code}"
 
-          s, count = re.subn(
+          s, n = re.subn(
               r'versionCode\s+\d+',
               f'versionCode {code}',
               s,
               count=1
           )
+          if n != 1:
+              raise SystemExit("versionCode update failed")
 
-          if count != 1:
-              raise SystemExit("versionCode could not be updated")
-
-          s, count = re.subn(
+          s, n = re.subn(
               r'versionName\s+"[^"]+"',
-              f'versionName "{name}"',
+              f'versionName "{version}"',
               s,
               count=1
           )
-
-          if count != 1:
-              raise SystemExit("versionName could not be updated")
+          if n != 1:
+              raise SystemExit("versionName update failed")
 
           p.write_text(s)
-          print(f"Release version: {name}, code {code}")
+          print("Version:", version)
           PY
 
-      - name: Generate app icon and splash
+      - name: Generate App Assets
         working-directory: android-wrapper
         run: |
           set -e
-          mkdir -p assets
-          cp ../Ronykhan_Salaryapp_launcher_1.png /tmp/app-icon.png
-
           python -m pip install --quiet pillow
 
           python - <<'PY'
           from PIL import Image, ImageOps
 
-          src = Image.open('/tmp/app-icon.png').convert('RGBA')
-          icon = ImageOps.contain(src, (1024, 1024))
+          src = Image.open(
+              "../Ronykhan_Salaryapp_launcher_1.png"
+          ).convert("RGBA")
 
+          icon = ImageOps.contain(src, (1024, 1024))
           canvas = Image.new(
-              'RGBA',
-              (1024, 1024),
-              (5, 5, 7, 255)
+              "RGBA", (1024, 1024), (5, 5, 7, 255)
           )
 
           canvas.alpha_composite(
               icon,
-              ((1024-icon.width)//2, (1024-icon.height)//2)
+              (
+                  (1024-icon.width)//2,
+                  (1024-icon.height)//2
+              )
           )
 
-          canvas.convert('RGB').save('assets/icon.png')
+          canvas.convert("RGB").save("assets/icon.png")
 
           Image.new(
-              'RGB',
-              (2732, 2732),
-              (5, 5, 7)
-          ).save('assets/splash.png')
+              "RGB", (2732, 2732), (5, 5, 7)
+          ).save("assets/splash.png")
           PY
 
-      - name: Generate Android assets
-        working-directory: android-wrapper
-        run: npx capacitor-assets generate --android
+          npx capacitor-assets generate --android
 
-      - name: Sync Capacitor
+      - name: Sync Android
         working-directory: android-wrapper
         run: npx cap sync android
 
-      - name: Configure Release Signing
+      - name: Setup Release Keystore
         working-directory: android-wrapper/android
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -163,125 +149,153 @@ jobs:
         run: |
           set -e
 
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ] ||
-             [ -z "$ANDROID_KEYSTORE_PASSWORD" ] ||
-             [ -z "$ANDROID_KEY_ALIAS" ] ||
-             [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "::error::Release signing secrets are missing."
-            exit 1
-          fi
+          for name in \
+            ANDROID_KEYSTORE_BASE64 \
+            ANDROID_KEYSTORE_PASSWORD \
+            ANDROID_KEY_ALIAS \
+            ANDROID_KEY_PASSWORD
+          do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing secret: $name"
+              exit 1
+            fi
+          done
 
-          echo "$ANDROID_KEYSTORE_BASE64" \
+          mkdir -p app
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" \
             | base64 --decode \
             > app/smart-salary-release.keystore
 
           test -s app/smart-salary-release.keystore
 
+          keytool -list \
+            -keystore app/smart-salary-release.keystore \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS"
+
           python - <<'PY'
-          from pathlib import Path
           import re
+          from pathlib import Path
 
           p = Path("app/build.gradle")
           s = p.read_text()
 
-          def block(text, name):
-              match = re.search(
-                  r'\b' + re.escape(name) + r'\s*\{',
-                  text
+          def locate_block(text, name, start=0):
+              pattern = re.compile(
+                  r'\b' + re.escape(name) + r'\s*\{'
               )
+              m = pattern.search(text, start)
 
-              if not match:
-                  raise SystemExit(f"Gradle block not found: {name}")
+              if not m:
+                  raise RuntimeError(
+                      "Cannot find Gradle block: " + name
+                  )
 
-              opening = text.find("{", match.start())
+              opening = text.find("{", m.start())
               depth = 0
+              quote = None
+              escape = False
 
               for i in range(opening, len(text)):
-                  if text[i] == "{":
-                      depth += 1
-                  elif text[i] == "}":
-                      depth -= 1
+                  c = text[i]
 
+                  if quote:
+                      if escape:
+                          escape = False
+                      elif c == "\\":
+                          escape = True
+                      elif c == quote:
+                          quote = None
+                      continue
+
+                  if c in ("'", '"'):
+                      quote = c
+                  elif c == "{":
+                      depth += 1
+                  elif c == "}":
+                      depth -= 1
                       if depth == 0:
                           return opening, i
 
-              raise SystemExit(f"Unbalanced Gradle block: {name}")
-
-          android_match = re.search(r'\bandroid\s*\{', s)
-
-          if not android_match:
-              raise SystemExit("android block not found")
-
-          android_open = s.find("{", android_match.start())
-
-          if not re.search(r'\bsigningConfigs\s*\{', s):
-              signing_configs = """
-              signingConfigs {
-                  release {
-                      storeFile file('smart-salary-release.keystore')
-                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
-                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
-                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
-                  }
-              }
-              """
-
-              s = (
-                  s[:android_open + 1]
-                  + signing_configs
-                  + s[android_open + 1:]
+              raise RuntimeError(
+                  "Unbalanced Gradle braces: " + name
               )
 
-          else:
-              sc_open, sc_close = block(s, "signingConfigs")
-              sc_content = s[sc_open + 1:sc_close]
-
-              if not re.search(r'\brelease\s*\{', sc_content):
-                  release_signing = """
-                  release {
-                      storeFile file('smart-salary-release.keystore')
-                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
-                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
-                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
-                  }
-                  """
-
-                  s = (
-                      s[:sc_close]
-                      + release_signing
-                      + s[sc_close:]
-                  )
-
-          bt_open, bt_close = block(s, "buildTypes")
-          bt_content = s[bt_open + 1:bt_close]
-
-          release_match = re.search(r'\brelease\s*\{', bt_content)
-
-          if not release_match:
-              raise SystemExit("release buildType not found")
-
-          release_open = bt_open + 1 + release_match.start()
-          release_brace = s.find("{", release_open)
-
-          release_open, release_close = block(
-              s[release_open:bt_close],
-              "release"
+          # Find android block
+          android_open, android_close = locate_block(
+              s, "android"
           )
 
-          release_open = bt_open + 1 + release_match.start()
-          release_brace = s.find("{", release_open)
-
-          release_content = s[release_brace + 1:bt_close]
-
-          if "signingConfig signingConfigs.release" not in release_content:
-              s = (
-                  s[:release_brace + 1]
-                  + "\n            signingConfig signingConfigs.release\n"
-                  + s[release_brace + 1:]
+          # Remove existing signingConfigs block
+          try:
+              sc_open, sc_close = locate_block(
+                  s, "signingConfigs", android_open
               )
+              s = s[:sc_open] + s[sc_close + 1:]
+          except RuntimeError:
+              pass
+
+          # Re-find android after modification
+          android_open, android_close = locate_block(
+              s, "android"
+          )
+
+          signing = """
+          signingConfigs {
+              release {
+                  storeFile file('smart-salary-release.keystore')
+                  storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                  keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                  keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+              }
+          }
+          """
+
+          s = (
+              s[:android_open + 1]
+              + "\n"
+              + signing
+              + "\n"
+              + s[android_open + 1:]
+          )
+
+          # Locate buildTypes
+          bt_open, bt_close = locate_block(
+              s, "buildTypes"
+          )
+
+          # Find release build type inside buildTypes
+          release_open, release_close = locate_block(
+              s, "release", bt_open + 1
+          )
+
+          release_text = s[
+              release_open + 1:release_close
+          ]
+
+          # Remove any old signingConfig entry
+          release_text = re.sub(
+              r'(?m)^\s*signingConfig\s+.*$',
+              '',
+              release_text
+          )
+
+          # Force our release signing config
+          release_text = (
+              "\n"
+              "            signingConfig signingConfigs.release\n"
+              + release_text
+          )
+
+          s = (
+              s[:release_open + 1]
+              + release_text
+              + s[release_close:]
+          )
 
           p.write_text(s)
-          print("Release signing configuration completed.")
+          print("Release signing configured.")
           PY
 
       - name: Build Release APK
@@ -292,10 +306,10 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -e
-          chmod +x ./gradlew
-          ./gradlew --no-daemon assembleRelease
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleRelease
 
-      - name: Verify APK signature
+      - name: Verify Release Signature
         run: |
           set -e
 
@@ -303,18 +317,20 @@ jobs:
 
           test -s "$APK"
 
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" \
-            verify --verbose "$APK"
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
 
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" \
-            verify --print-certs "$APK"
+          "$apksigner" verify --verbose "$APK"
+          "$apksigner" verify --print-certs "$APK"
+
+          sha256sum "$APK"
 
       - name: Prepare APK
         run: |
           set -e
 
-          cp android-wrapper/android/app/build/outputs/apk/release/app-release.apk \
-             Smart-Salary.apk
+          cp \
+            android-wrapper/android/app/build/outputs/apk/release/app-release.apk \
+            Smart-Salary.apk
 
           test -s Smart-Salary.apk
           ls -lh Smart-Salary.apk
@@ -325,6 +341,7 @@ jobs:
           tag_name: smart-salary-release-${{ github.run_number }}
           name: Smart Salary App Release ${{ github.run_number }}
           make_latest: true
+          generate_release_notes: true
           files: Smart-Salary.apk
 
       - name: Upload APK Artifact
