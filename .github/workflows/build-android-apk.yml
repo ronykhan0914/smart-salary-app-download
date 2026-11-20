@@ -104,7 +104,8 @@ jobs:
         working-directory: android-wrapper
         run: |
           set -e
-          python -m pip install --quiet pillow
+          mkdir -p assets
+          python -m pip install --quiet --retries 5 --timeout 60 pillow
 
           python - <<'PY'
           from PIL import Image, ImageOps
