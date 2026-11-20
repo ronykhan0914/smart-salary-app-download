@@ -164,13 +164,17 @@ jobs:
 
           mkdir -p app
 
+          # Normalize whitespace in Base64 secret and decode strictly
           printf '%s' "$ANDROID_KEYSTORE_BASE64" \
+            | tr -d '[:space:]' \
             | base64 --decode \
             > app/smart-salary-release.keystore
 
           test -s app/smart-salary-release.keystore
 
-          keytool -list \
+          echo "Decoded keystore size: $(wc -c < app/smart-salary-release.keystore) bytes"
+
+          keytool -list -v \
             -keystore app/smart-salary-release.keystore \
             -storepass "$ANDROID_KEYSTORE_PASSWORD" \
             -alias "$ANDROID_KEY_ALIAS"
